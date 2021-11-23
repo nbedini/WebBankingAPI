@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -15,9 +16,11 @@ namespace WebBankingAPI
 {
     public class Startup
     {
+        public static string MasterKey;
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
+            MasterKey = Configuration["MasterKey"];
         }
 
         public IConfiguration Configuration { get; }
@@ -27,6 +30,21 @@ namespace WebBankingAPI
         {
 
             services.AddControllers();
+
+            services.AddAuthentication(x => {
+                x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(x =>
+            {
+                x.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuer = false,
+                    ValidateLifetime = false,
+                    ValidateIssuerSigningKey = true,
+                    ValidateAudience = false,
+                    IssuerSigningKey = SecurityKeyGenerator.GetSecurityKey()
+                };
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -40,6 +58,8 @@ namespace WebBankingAPI
             app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseAuthentication();
 
             app.UseAuthorization();
 
