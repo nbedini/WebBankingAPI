@@ -10,7 +10,7 @@ namespace WebBankingAPI.Controllers
     [ApiController]
     public class logoutController : ControllerBase
     {
-        [HttpGet("")]
+        [HttpPost("")]
         public ActionResult Logout()
         {
             var username = HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Username").Value;

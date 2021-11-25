@@ -115,7 +115,7 @@ namespace WebBankingAPI.Controllers
             var usernametoken = HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Username").Value;
             using (WebBankingContext model = new WebBankingContext())
             {
-                if (model.Users.FirstOrDefault(fod => fod.Id == idtoken && fod.Username == usernametoken).IsBanker)
+                if (model.Users.FirstOrDefault(fod => fod.Id == idtoken && fod.Username == usernametoken).IsBanker && model.BankAccounts.Where(w => w.Id == id).Count() > 0)
                 {
                     var bankaccount = model.BankAccounts.Include(i => i.FkUserNavigation).FirstOrDefault(fod => fod.Id == id);
                     var AccountMovement = model.AccountMovements.Where(w => w.FkBankAccountNavigation == bankaccount);
@@ -151,23 +151,22 @@ namespace WebBankingAPI.Controllers
             var usernametoken = HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Username").Value;
             using (WebBankingContext model = new WebBankingContext())
             {
-                if (model.BankAccounts.FirstOrDefault(fod => fod.Id == id) != null)
+                if (model.BankAccounts.FirstOrDefault(fod => fod.Id == id) != null && model.AccountMovements.FirstOrDefault(fod => fod.Id == idmovimento) != null)
                 {
                     if (model.Users.FirstOrDefault(fod => fod.Id == idtoken && fod.Username == usernametoken).IsBanker && model.AccountMovements.Where(w => w.Id == idmovimento && w.FkBankAccountNavigation.Id == id).Count() > 0)
                         return Ok(model.AccountMovements
                             .Where(w => w.FkBankAccountNavigation.Id == id && w.Id == idmovimento)
                             .Select(s => new { s.Id, s.Description, s.In, s.Out, s.Date })
                             .ToList());
-                    else
+                    else if (model.BankAccounts.FirstOrDefault(fod => fod.Id == id).FkUser == idtoken && model.AccountMovements.Where(w => w.Id == idmovimento && w.FkBankAccountNavigation.Id == id).Count() > 0)
                     {
-                        if (model.BankAccounts.FirstOrDefault(fod => fod.Id == id).FkUser == idtoken && model.AccountMovements.Where(w => w.Id == idmovimento && w.FkBankAccountNavigation.Id == id).Count() > 0)
-                            return Ok(model.AccountMovements
-                                .Where(w => w.FkBankAccountNavigation.Id == id && w.Id == idmovimento)
-                                .Select(s => new { s.Id, s.Description, s.In, s.Out, s.Date })
-                                .ToList());
-                        else
-                            return Problem("Non è un tuo conto corrente");
+                        return Ok(model.AccountMovements
+                            .Where(w => w.FkBankAccountNavigation.Id == id && w.Id == idmovimento)
+                            .Select(s => new { s.Id, s.Description, s.In, s.Out, s.Date })
+                            .ToList());
                     }
+                    else
+                        return Problem();
                 }
                 else
                 {
@@ -248,11 +247,18 @@ namespace WebBankingAPI.Controllers
             var usernametoken = HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Username").Value;
             using (WebBankingContext model = new WebBankingContext())
             {
-                if(model.Users.FirstOrDefault(fod => fod.Id == idtoken).IsBanker && model.BankAccounts.Where(w => w.Iban == contocorrentespec.Iban).Count() == 0)
+                if(model.Users.FirstOrDefault(fod => fod.Id == idtoken).IsBanker)
                 {
-                    model.BankAccounts.Add(new BankAccount { Iban = contocorrentespec.Iban, FkUser = contocorrentespec.User });
-                    model.SaveChanges();
-                    return Ok();
+                    if(model.BankAccounts.Where(w => w.Iban == contocorrentespec.Iban).Count() == 0)
+                    {
+                        model.BankAccounts.Add(new BankAccount { Iban = contocorrentespec.Iban, FkUser = contocorrentespec.User });
+                        model.SaveChanges();
+                        return Ok();
+                    }
+                    else
+                    {
+                        return Problem();
+                    }
                 }
                 else
                 {
@@ -267,32 +273,37 @@ namespace WebBankingAPI.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
-        public ActionResult Update(int id, [FromBody]ContoCorrenteSpec contocorrenteupdated)
+        public ActionResult Update(int id, [FromBody]BankAccount contocorrenteupdated)
         {
             var idtoken = Convert.ToInt32(HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Id").Value);
             var usernametoken = HttpContext.User.Claims.FirstOrDefault(fod => fod.Type == "Username").Value;
             using (WebBankingContext model = new WebBankingContext())
             {
-                if (model.Users.FirstOrDefault(fod => fod.Id == idtoken).IsBanker && model.BankAccounts.Where(w => w.Iban == contocorrenteupdated.Iban).Count() == 0)
+                if(model.Users.FirstOrDefault(fod => fod.Username == usernametoken && fod.Id == idtoken).IsBanker)
                 {
-                    var candidate = model.BankAccounts.FirstOrDefault(fod => fod.Id == id);
-                    if (contocorrenteupdated != null && candidate != null)
+                    if(model.BankAccounts.Where(w => w.Id == id).Count() > 0)
                     {
-                        candidate.FkUser = contocorrenteupdated.User;
-                        candidate.Iban = contocorrenteupdated.Iban;
-                        model.SaveChanges();
-                        return Ok();
+                        if(model.BankAccounts.Where(w => w.Iban == contocorrenteupdated.Iban).Count() < 1)
+                        {
+                            var candidate = model.BankAccounts.FirstOrDefault(fod => fod.Id == id);
+                            candidate = contocorrenteupdated;
+                            model.SaveChanges();
+                            return Ok();
+                        }
+                        else
+                        {
+                            return Problem();
+                        }
                     }
-                    return Problem();
+                    else
+                    {
+                        return NotFound();
+                    }
                 }
                 else
                 {
-                    if (model.Users.FirstOrDefault(fod => fod.Id == idtoken).IsBanker)
-                        return Problem("Iban già esistente");
-                    else
-                        return Unauthorized();
+                    return Unauthorized();
                 }
-
             }
         }
 
@@ -310,11 +321,18 @@ namespace WebBankingAPI.Controllers
             {
                 if (model.Users.FirstOrDefault(fod => fod.Id == idtoken).IsBanker)
                 {
-                    var candidate = model.BankAccounts.FirstOrDefault(fod => fod.Id == id);
-                    model.AccountMovements.RemoveRange(model.AccountMovements.Where(w => w.FkBankAccountNavigation.Id == candidate.Id));
-                    model.BankAccounts.Remove(candidate);
-                    model.SaveChanges();
-                    return Ok();
+                    if(model.BankAccounts.Where(w => w.Id == id).Count() > 0)
+                    {
+                        var candidate = model.BankAccounts.FirstOrDefault(fod => fod.Id == id);
+                        model.AccountMovements.RemoveRange(model.AccountMovements.Where(w => w.FkBankAccountNavigation.Id == candidate.Id));
+                        model.BankAccounts.Remove(candidate);
+                        model.SaveChanges();
+                        return Ok();
+                    }
+                    else
+                    {
+                        return NotFound();
+                    }
                 }
                 else
                 {

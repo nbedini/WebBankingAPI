@@ -13,7 +13,7 @@ namespace WebBankingAPI.Controllers
     [ApiController]
     public class loginController : ControllerBase
     {
-        [HttpGet("")]
+        [HttpPost("")]
         public ActionResult Login([FromBody]User usercredential)
         {
             using (WebBankingContext model = new WebBankingContext())
